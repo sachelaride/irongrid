@@ -1,0 +1,976 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Device {
+  id                 String              @id @default(uuid())
+  name               String
+  model              String?
+  hostname           String?
+  ipAddress          String
+  macAddress         String?
+  type               DeviceType          @default(SERVER)
+  status             DeviceStatus        @default(OFFLINE)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  lastCpuUsage       Float?
+  lastRamUsage       Float?
+  lastSeen           DateTime?
+  department         String?
+  user               String?
+  lastLatency        Float?
+  parentId           String?
+  agentId            String?             @unique
+  machineId          String?             @unique
+  departmentId       String?
+  locationId         String?
+  userId             String?
+  snmpCommunityId    String?
+  assetNumber        String?             @unique
+  notes              String?
+  purchaseDate       DateTime?
+  purchaseValue      Decimal?            @db.Decimal(10, 2)
+  supplier           String?
+  warrantyExpiry     DateTime?
+  topoX              Float?
+  topoY              Float?
+  parentPort         String?
+  connectedPort      Int?
+  offlineSince       DateTime?
+  criticality        DeviceCriticality   @default(MEDIUM)
+  energyConsumption  Float?
+  hasBackup          Boolean             @default(false)
+  hasUPS             Boolean             @default(false)
+  vlan               String?
+  portSpeed          String?
+  monitoringLevel    Int?                @default(0)
+  topologyRole       String?
+  additionalParents  Json?
+  hasHeadset         Boolean             @default(false)
+  hasWebcam          Boolean             @default(false)
+  voipExtension      String?
+  lastAvName         String?             // Último Antivírus detectado
+  lastAvStatus       String?             // Status do Antivírus (Ativo, Inativo, Desatualizado)
+  usbBlocked         Boolean             @default(false) // Se as portas USB estão bloqueadas
+  alerts             Alert[]
+  customMapNodes     CustomMapNode[]
+  departmentRef      Department?         @relation(fields: [departmentId], references: [id])
+  location           Location?           @relation(fields: [locationId], references: [id])
+  parent             Device?             @relation("DeviceHierarchy", fields: [parentId], references: [id])
+  children           Device[]            @relation("DeviceHierarchy")
+  snmpCommunity      SnmpCommunity?      @relation("DeviceSnmp", fields: [snmpCommunityId], references: [id])
+  assignedUser       User?               @relation(fields: [userId], references: [id])
+  deviceAlerts       DeviceAlert[]
+  hardware           Hardware?
+  ipamAddresses      IPAMAddress[]
+  maintenanceCosts   MaintenanceCost[]
+  maintenanceRecords MaintenanceRecord[]
+  networkInterfaces  NetworkInterface[]
+  peripherals        Peripheral[]
+  remoteActionLogs   RemoteActionLog[]
+  software           Software[]
+  syslogEntries      SyslogEntry[]
+  tickets            Ticket[]
+  activityLogs       ActivityLog[]
+}
+
+model Hardware {
+  id           String   @id @default(cuid())
+  deviceId     String   @unique
+  cpuModel     String?
+  cpuCores     Int?
+  cpuThreads   Int?
+  cpuSpeed     Float?
+  totalMemory  BigInt?
+  memorySlots  Int?
+  motherboard  String?
+  biosVersion  String?
+  serialNumber String?
+  totalDisk    BigInt?
+  gpuModel     String?
+  gpuMemory    BigInt?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+}
+
+model Software {
+  id          String    @id @default(cuid())
+  deviceId    String
+  name        String
+  version     String?
+  publisher   String?
+  installDate DateTime?
+  installPath String?
+  size        BigInt?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  device      Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([name])
+  @@index([name, version])
+}
+
+model ActivityLog {
+  id              String   @id @default(cuid())
+  deviceId        String
+  appName         String
+  durationSeconds Float
+  date            DateTime @default(now())
+  device          Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([date])
+}
+
+model Peripheral {
+  id           String   @id @default(cuid())
+  deviceId     String
+  type         String
+  model        String?
+  manufacturer String?
+  serialNumber String?
+  status       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  device       Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([type])
+}
+
+model Department {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  locationId  String?
+  location    Location? @relation(fields: [locationId], references: [id])
+  devices     Device[]
+  users       User[]
+
+  @@unique([name, locationId])
+}
+
+model Location {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  description   String?
+  address       String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  departments   Department[]
+  devices       Device[]
+  ipamSubnets   IPAMSubnet[]
+  networkRanges NetworkRange[]
+}
+
+model Alert {
+  id         String        @id @default(uuid())
+  title      String
+  message    String
+  severity   AlertSeverity @default(INFO)
+  status     AlertStatus   @default(ACTIVE)
+  createdAt  DateTime      @default(now())
+  resolvedAt DateTime?
+  deviceId   String?
+  device     Device?       @relation(fields: [deviceId], references: [id])
+  tickets    Ticket[]
+}
+
+model MonitoredDevice {
+  id         String   @id @default(uuid())
+  ip         String
+  community  String
+  interfaces Int[]
+  status     String   @default("up")
+  lastScan   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  deviceId   String?
+}
+
+model SystemParameter {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  value       String
+  description String?
+  category    String    @default("GENERAL")
+  type        ParamType @default(STRING)
+  updatedAt   DateTime  @updatedAt
+}
+
+model RemoteActionLog {
+  id          String    @id @default(cuid())
+  deviceId    String
+  userId      String?
+  action      String
+  parameters  Json
+  status      String
+  exitCode    Int?
+  output      String?
+  error       String?
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  device      Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([status])
+}
+
+model Ticket {
+  id                        String              @id @default(cuid())
+  ticketNumber              Int                 @unique @default(autoincrement())
+  title                     String
+  description               String?
+  status                    TicketStatus        @default(OPEN)
+  priority                  TicketPriority      @default(MEDIUM)
+  impact                    TicketImpact        @default(MEDIUM)
+  urgency                   TicketUrgency       @default(MEDIUM)
+  category                  TicketCategory      @default(INCIDENT)
+  deviceId                  String?
+  alertId                   String?
+  requesterId               String?
+  assignedToId              String?
+  createdAt                 DateTime            @default(now())
+  updatedAt                 DateTime            @updatedAt
+  resolvedAt                DateTime?
+  closedAt                  DateTime?
+  slaDeadline               DateTime?
+  slaResponseTime           DateTime?
+  rating                    Int?
+  ratingComment             String?
+  serviceTypeId             String?
+  slaExtensionJustification String?
+  slaPaused                 Boolean             @default(false)
+  slaPausedAt               DateTime?
+  assignedAt                DateTime?
+  slaPauseJustification     String?
+  source                    TicketSource        @default(PORTAL)
+  maintenanceCosts          MaintenanceCost[]
+  alert                     Alert?              @relation(fields: [alertId], references: [id])
+  assignedTo                User?               @relation("AssignedTo", fields: [assignedToId], references: [id])
+  device                    Device?             @relation(fields: [deviceId], references: [id])
+  requester                 User?               @relation("CreatedBy", fields: [requesterId], references: [id])
+  serviceType               ServiceType?        @relation(fields: [serviceTypeId], references: [id])
+  activities                TicketActivity[]
+  customValues              TicketCustomValue[]
+
+  @@index([deviceId])
+  @@index([status])
+  @@index([priority])
+  @@index([requesterId])
+}
+
+model CustomField {
+  id          String              @id @default(cuid())
+  name        String
+  label       String
+  type        FieldType           @default(TEXT)
+  category    TicketCategory?
+  required    Boolean             @default(false)
+  options     Json?
+  placeholder String?
+  order       Int                 @default(0)
+  enabled     Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  values      TicketCustomValue[]
+
+  @@index([category])
+  @@index([enabled])
+}
+
+model TicketCustomValue {
+  id        String      @id @default(cuid())
+  ticketId  String
+  fieldId   String
+  value     String
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  field     CustomField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+  ticket    Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, fieldId])
+  @@index([ticketId])
+  @@index([fieldId])
+}
+
+model TicketActivity {
+  id        String       @id @default(cuid())
+  ticketId  String
+  userId    String
+  message   String
+  type      ActivityType @default(COMMENT)
+  createdAt DateTime     @default(now())
+  ticket    Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([resource])
+  @@index([userId])
+}
+
+model SLAConfiguration {
+  id                    String         @id @default(cuid())
+  priority              TicketPriority @unique
+  responseTimeMinutes   Int
+  resolutionTimeMinutes Int
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+}
+
+model User {
+  id                String                 @id @default(cuid())
+  username          String                 @unique
+  password          String
+  name              String
+  role              UserRole               @default(USER)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  departmentId      String?
+  email             String?                @unique
+  devices           Device[]
+  knowledgeArticles KnowledgeArticle[]
+  articleViews      KnowledgeArticleView[]
+  ticketsAssigned   Ticket[]               @relation("AssignedTo")
+  ticketsCreated    Ticket[]               @relation("CreatedBy")
+  department        Department?            @relation(fields: [departmentId], references: [id])
+}
+
+model SnmpCommunity {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  version       String
+  community     String?
+  username      String?
+  authProto     String?
+  authPass      String?
+  privProto     String?
+  privPass      String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  devices       Device[]       @relation("DeviceSnmp")
+  networkRanges NetworkRange[]
+}
+
+model NetworkRange {
+  id               String         @id @default(cuid())
+  name             String
+  subnet           String
+  locationId       String?
+  enabled          Boolean        @default(true)
+  scanSchedule     String?
+  snmpEnabled      Boolean        @default(false)
+  snmpCommunityId  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  scanHour         Int?           @default(3)
+  scanIntervalDays Int?           @default(7)
+  lastScanAt       DateTime?
+  location         Location?      @relation(fields: [locationId], references: [id])
+  snmpCommunity    SnmpCommunity? @relation(fields: [snmpCommunityId], references: [id])
+}
+
+model NetworkInterface {
+  id          String   @id @default(cuid())
+  deviceId    String
+  index       Int
+  name        String
+  description String?
+  type        String?
+  speed       BigInt?
+  macAddress  String?
+  status      String?
+  adminStatus String?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  enabled     Boolean  @default(false)
+  autoEnabled Boolean  @default(false)
+  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([macAddress])
+}
+
+model ArticleCategory {
+  id          String             @id @default(cuid())
+  name        String             @unique
+  description String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  articles    KnowledgeArticle[]
+}
+
+model KnowledgeArticle {
+  id            String                 @id @default(cuid())
+  title         String
+  content       String
+  tags          String[]
+  categoryId    String?
+  authorId      String
+  views         Int                    @default(0)
+  isPublic      Boolean                @default(true)
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  serviceTypeId String?
+  author        User                   @relation(fields: [authorId], references: [id])
+  category      ArticleCategory?       @relation(fields: [categoryId], references: [id])
+  serviceType   ServiceType?           @relation(fields: [serviceTypeId], references: [id])
+  viewHistory   KnowledgeArticleView[]
+
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([title])
+  @@index([serviceTypeId])
+}
+
+model KnowledgeArticleView {
+  id        String           @id @default(cuid())
+  articleId String
+  userId    String
+  viewedAt  DateTime         @default(now())
+  article   KnowledgeArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([articleId])
+  @@index([userId])
+}
+
+model MaintenanceRecord {
+  id            String            @id @default(cuid())
+  deviceId      String
+  title         String
+  description   String?
+  type          MaintenanceType   @default(CORRECTIVE)
+  status        MaintenanceStatus @default(COMPLETED)
+  cost          Float?
+  performer     String?
+  scheduledDate DateTime          @default(now())
+  completedAt   DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  device        Device            @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([type])
+  @@index([status])
+}
+
+model NotificationChannel {
+  id         String            @id @default(cuid())
+  name       String
+  type       ChannelType
+  enabled    Boolean           @default(true)
+  config     Json
+  severities AlertSeverity[]
+  lastTested DateTime?
+  testStatus String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  logs       NotificationLog[]
+
+  @@index([type])
+  @@index([enabled])
+}
+
+model NotificationLog {
+  id        String              @id @default(cuid())
+  channelId String
+  alertId   String?
+  status    String
+  message   String
+  response  String?
+  error     String?
+  sentAt    DateTime            @default(now())
+  channel   NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId])
+  @@index([status])
+  @@index([sentAt])
+}
+
+model ServiceGroup {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  services    ServiceType[]
+}
+
+model ServiceType {
+  id                    String             @id @default(cuid())
+  name                  String
+  description           String?
+  groupId               String
+  priority              TicketPriority     @default(MEDIUM)
+  responseTimeMinutes   Int?
+  resolutionTimeMinutes Int?
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  articles              KnowledgeArticle[]
+  group                 ServiceGroup       @relation(fields: [groupId], references: [id])
+  tickets               Ticket[]
+
+  @@unique([name, groupId])
+}
+
+model SyslogEntry {
+  id         String   @id @default(cuid())
+  timestamp  DateTime
+  hostname   String
+  facility   Int
+  severity   Int
+  tag        String?
+  message    String
+  rawMessage String
+  deviceId   String?
+  createdAt  DateTime @default(now())
+  device     Device?  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([severity])
+  @@index([timestamp])
+  @@index([hostname])
+}
+
+model EmailConfiguration {
+  id          String    @id @default(cuid())
+  host        String
+  port        Int
+  secure      Boolean   @default(true)
+  username    String?
+  password    String?
+  fromAddress String
+  fromName    String    @default("IronGrid Monitor")
+  lastTested  DateTime?
+  testStatus  String?
+  testError   String?
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model DeviceAlert {
+  id         String          @id @default(cuid())
+  deviceId   String
+  type       DeviceAlertType
+  severity   AlertSeverity
+  message    String
+  createdAt  DateTime        @default(now())
+  resolvedAt DateTime?
+  device     Device          @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([type])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+model MaintenanceCost {
+  id          String                  @id @default(cuid())
+  deviceId    String
+  ticketId    String?
+  cost        Decimal                 @db.Decimal(10, 2)
+  date        DateTime                @default(now())
+  description String
+  category    MaintenanceCostCategory @default(REPAIR)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  device      Device                  @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  ticket      Ticket?                 @relation(fields: [ticketId], references: [id])
+
+  @@index([deviceId])
+  @@index([ticketId])
+  @@index([date])
+}
+
+model MailCollectorConfig {
+  id          String         @id @default(cuid())
+  name        String         @unique
+  host        String
+  port        Int            @default(993)
+  secure      Boolean        @default(true)
+  user        String
+  password    String
+  folder      String         @default("INBOX")
+  deleteAfter Boolean        @default(false)
+  category    TicketCategory @default(INCIDENT)
+  enabled     Boolean        @default(true)
+  lastSync    DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model IPAMSubnet {
+  id          String        @id @default(cuid())
+  name        String?
+  subnet      String        @unique
+  description String?
+  locationId  String?
+  vlan        String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  isScanning  Boolean       @default(false)
+  addresses   IPAMAddress[]
+  scanLogs    IPAMScanLog[]
+  location    Location?     @relation(fields: [locationId], references: [id])
+}
+
+model IPAMAddress {
+  id           String          @id @default(cuid())
+  ip           String
+  subnetId     String
+  status       IPAddressStatus @default(AVAILABLE)
+  hostname     String?
+  mac          String?
+  deviceId     String?
+  lastSeen     DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  reservedFor  String?
+  reservedNote String?
+  device       Device?         @relation(fields: [deviceId], references: [id])
+  subnet       IPAMSubnet      @relation(fields: [subnetId], references: [id], onDelete: Cascade)
+
+  @@unique([ip, subnetId])
+}
+
+model IPAMScanLog {
+  id          String     @id @default(cuid())
+  subnetId    String
+  triggeredBy String     @default("scheduler")
+  startedAt   DateTime   @default(now())
+  completedAt DateTime?
+  totalIPs    Int        @default(0)
+  activeIPs   Int        @default(0)
+  newIPs      Int        @default(0)
+  freedIPs    Int        @default(0)
+  methods     String[]   @default([])
+  subnet      IPAMSubnet @relation(fields: [subnetId], references: [id], onDelete: Cascade)
+
+  @@index([subnetId])
+  @@index([startedAt])
+}
+
+model CustomMap {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  edges       CustomMapEdge[]
+  labels      CustomMapLabel[]
+  nodes       CustomMapNode[]
+  zones       CustomMapZone[]
+}
+
+model CustomMapNode {
+  id           String          @id @default(cuid())
+  customMapId  String
+  deviceId     String?
+  x            Float
+  y            Float
+  selectedPort String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  name         String?
+  type         String?
+  zIndex       Int             @default(0)
+  sourceEdges  CustomMapEdge[] @relation("SourceNode")
+  targetEdges  CustomMapEdge[] @relation("TargetNode")
+  customMap    CustomMap       @relation(fields: [customMapId], references: [id], onDelete: Cascade)
+  device       Device?         @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([customMapId])
+  @@index([deviceId])
+}
+
+model CustomMapEdge {
+  id          String        @id @default(cuid())
+  customMapId String
+  sourceId    String
+  targetId    String
+  sourcePort  String?
+  targetPort  String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  customMap   CustomMap     @relation(fields: [customMapId], references: [id], onDelete: Cascade)
+  source      CustomMapNode @relation("SourceNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  target      CustomMapNode @relation("TargetNode", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([customMapId])
+}
+
+model CustomMapZone {
+  id          String    @id @default(cuid())
+  customMapId String
+  label       String    @default("Nova Área")
+  x           Float
+  y           Float
+  width       Float     @default(200)
+  height      Float     @default(150)
+  color       String    @default("#3b82f6")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  type        String    @default("rectangle")
+  zIndex      Int       @default(0)
+  customMap   CustomMap @relation(fields: [customMapId], references: [id], onDelete: Cascade)
+
+  @@index([customMapId])
+}
+
+model CustomMapLabel {
+  id          String    @id @default(cuid())
+  customMapId String
+  text        String    @default("Texto")
+  x           Float
+  y           Float
+  fontSize    Int       @default(12)
+  color       String    @default("#e2e8f0")
+  bgColor     String    @default("#1e293b")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  zIndex      Int       @default(0)
+  customMap   CustomMap @relation(fields: [customMapId], references: [id], onDelete: Cascade)
+
+  @@index([customMapId])
+}
+
+model CronJob {
+  id         String       @id @default(cuid())
+  name       String
+  schedule   String
+  action     String
+  parameters Json?
+  targetId   String?
+  enabled    Boolean      @default(true)
+  lastRun    DateTime?
+  nextRun    DateTime?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  userId     String?
+  logs       CronJobLog[]
+
+  @@index([enabled])
+}
+
+model CronJobLog {
+  id         String    @id @default(cuid())
+  cronJobId  String
+  status     String
+  output     String?
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  cronJob    CronJob   @relation(fields: [cronJobId], references: [id], onDelete: Cascade)
+
+  @@index([cronJobId])
+  @@index([startedAt])
+}
+
+model MonitoringConfig {
+  level             Int      @id
+  downtimeThreshold Int      @default(5)
+  uptimeThreshold   Int      @default(2)
+  email             String?
+  enabled           Boolean  @default(true)
+  updatedAt         DateTime @updatedAt
+  latencyThreshold  Int      @default(500)
+}
+
+enum DeviceType {
+  SERVER
+  ROUTER
+  SWITCH
+  PRINTER
+  WORKSTATION
+  OTHER
+  FIREWALL
+  GATEWAY
+  VOIP
+  NAS
+  CAMERA
+  ACCESS_POINT
+  DATABASE
+  INTERNET
+}
+
+enum DeviceStatus {
+  ONLINE
+  OFFLINE
+  WARNING
+  CRITICAL
+}
+
+enum DeviceCriticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+enum ParamType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+}
+
+enum FieldType {
+  TEXT
+  TEXTAREA
+  NUMBER
+  DATE
+  SELECT
+  RADIO
+  CHECKBOX
+  EMAIL
+  PHONE
+  URL
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  RESOLVED
+  CLOSED
+  CANCELLED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TicketImpact {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketUrgency {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum TicketCategory {
+  INCIDENT
+  REQUEST
+  PROBLEM
+  CHANGE
+}
+
+enum TicketSource {
+  PORTAL
+  MAIL
+  API
+  SYSTEM
+}
+
+enum ActivityType {
+  COMMENT
+  STATUS_CHANGE
+  PRIORITY_CHANGE
+  ASSIGNMENT
+  RESOLUTION
+  TECHNICAL_NOTE
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+  USER
+  TECNICO
+}
+
+enum MaintenanceType {
+  PREVENTIVE
+  CORRECTIVE
+  UPGRADE
+  REPLACEMENT
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ChannelType {
+  WEBHOOK
+  TELEGRAM
+  SLACK
+  EMAIL
+  SMS
+  DISCORD
+  TEAMS
+}
+
+enum DeviceAlertType {
+  LICENSE_EXPIRING
+  WARRANTY_EXPIRING
+  IP_CONFLICT
+  OFFLINE_EXTENDED
+  LOW_MEMORY
+  OLD_HARDWARE
+  NO_BACKUP
+  NO_UPS
+  HIGH_ENERGY
+  CRITICAL_DEVICE
+}
+
+enum MaintenanceCostCategory {
+  REPAIR
+  UPGRADE
+  REPLACEMENT
+  PREVENTIVE
+  EMERGENCY
+  OTHER
+}
+
+enum IPAddressStatus {
+  AVAILABLE
+  USED
+  RESERVED
+  STATIC
+}

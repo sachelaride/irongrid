@@ -1,0 +1,49 @@
+{
+    "name": "irongrid-agent",
+    "version": "4.0.1",
+    "main": "dist/bundle.js",
+    "bin": "dist/bundle.js",
+    "scripts": {
+        "dev": "tsx watch src/index.ts",
+        "build": "tsc",
+        "build:exe": "tsc && esbuild dist/index.js --bundle --platform=node --target=node18 --outfile=dist/bundle.js --external:screenshot-desktop --external:node-windows && pkg . --output dist/bin/agent",
+        "build:installer": "makensis installer.nsi"
+    },
+    "pkg": {
+        "scripts": [
+            "dist/**/*.js"
+        ],
+        "assets": [
+            "node_modules/screenshot-desktop/**/*",
+            "../../node_modules/node-windows/**/*",
+            "../../node_modules/systray2/traybin/**/*",
+            "assets/IronGrid.ico"
+        ],
+        "targets": [
+            "node18-linux-x64",
+            "node18-win-x64"
+        ]
+    },
+    "dependencies": {
+        "@trpc/client": "^10.45.0",
+        "@trpc/server": "^10.45.0",
+        "axios": "^1.6.5",
+        "cross-fetch": "^4.1.0",
+        "dotenv": "^17.2.3",
+        "node-notifier": "^10.0.1",
+        "node-windows": "^1.0.0-beta.8",
+        "pkg": "^5.8.1",
+        "screenshot-desktop": "^1.15.3",
+        "socket.io-client": "^4.8.3",
+        "systeminformation": "^5.21.22",
+        "systray2": "^2.1.4",
+        "zod": "^3.22.4"
+    },
+    "devDependencies": {
+        "@types/node": "^20.11.0",
+        "@types/node-windows": "^0.1.6",
+        "@irongrid/server": "*",
+        "tsx": "^4.7.0",
+        "typescript": "^5.3.3"
+    }
+}

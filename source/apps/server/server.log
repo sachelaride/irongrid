@@ -1,0 +1,4 @@
+
+> @visinode/server@0.0.1 dev
+> tsx watch src/index.ts
+
